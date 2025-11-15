@@ -2750,53 +2750,43 @@ comment_system = None
 # 📧 نظام إرسال البيانات المرن
 # ==============================
 def export_user_data():
-    """تصدير البيانات - يعمل في كلا البيئتين"""
     try:
-        if not CONNECTION_STRING:
+        conn = create_connection()
+        if not conn:
             return None
+            
+        cursor = conn.cursor()
         
-        # استخدام الاتصال المناسب للبيئة
-        if DB_CONFIG['environment'] == 'local':
-            # SQL Server المحلي
-            conn = pyodbc.connect(CONNECTION_STRING)
-        else:
-            # PostgreSQL على Render
-            import psycopg2
-            conn = psycopg2.connect(CONNECTION_STRING)
-        
-        # جلب بيانات المستخدمين
-        query = """
+        # جلب بيانات المستخدمين بدون pandas
+        cursor.execute("""
             SELECT user_id, telegram_username, full_name, phone_number, email, 
                    referral_code, total_referrals, registration_date
             FROM user_profiles 
             WHERE status = 'active'
-        """
+        """)
+        users = cursor.fetchall()  # ✅ بدلاً من pd.read_sql_query()
         
-        users_df = pd.read_sql_query(query, conn)
-        
-        # جلب روابط التواصل
-        social_query = """
-            SELECT u.user_id, u.full_name, ul.platform, ul.url
-            FROM user_links ul
-            JOIN user_profiles u ON ul.user_id = u.user_id
-        """
-        
-        social_df = pd.read_sql_query(social_query, conn)
+        # تحويل إلى قواميس يدوياً
+        users_data = []
+        for user in users:
+            users_data.append({
+                'user_id': user[0],
+                'telegram_username': user[1],
+                'full_name': user[2],
+                'phone_number': user[3],
+                'email': user[4],
+                'referral_code': user[5],
+                'total_referrals': user[6],
+                'registration_date': user[7].isoformat() if user[7] else None
+            })  # ✅ بدلاً من .to_dict('records')
         
         conn.close()
         
-        # إعداد التقرير
-        backup_data = {
+        return {
             'backup_timestamp': datetime.now().isoformat(),
-            'environment': DB_CONFIG['environment'],
-            'users_count': len(users_df),
-            'users': users_df.to_dict('records'),
-            'social_links_count': len(social_df),
-            'social_links': social_df.to_dict('records')
+            'users_count': len(users_data),
+            'users': users_data  # ✅ نفس النتيجة ولكن بدون pandas
         }
-        
-        logger.info(f"✅ تم تصدير بيانات من البيئة: {DB_CONFIG['environment']}")
-        return backup_data
         
     except Exception as e:
         logger.error(f"❌ خطأ في تصدير البيانات: {e}")
