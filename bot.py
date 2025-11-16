@@ -2750,6 +2750,7 @@ comment_system = None
 # 📧 نظام إرسال البيانات المرن
 # ==============================
 def export_user_data():
+    """تصدير البيانات بدون استخدام pandas"""
     try:
         conn = create_connection()
         if not conn:
@@ -2757,16 +2758,16 @@ def export_user_data():
             
         cursor = conn.cursor()
         
-        # جلب بيانات المستخدمين بدون pandas
+        # جلب بيانات المستخدمين
         cursor.execute("""
             SELECT user_id, telegram_username, full_name, phone_number, email, 
                    referral_code, total_referrals, registration_date
             FROM user_profiles 
             WHERE status = 'active'
         """)
-        users = cursor.fetchall()  # ✅ بدلاً من pd.read_sql_query()
+        users = cursor.fetchall()
         
-        # تحويل إلى قواميس يدوياً
+        # تحويل إلى قواميس
         users_data = []
         for user in users:
             users_data.append({
@@ -2778,14 +2779,34 @@ def export_user_data():
                 'referral_code': user[5],
                 'total_referrals': user[6],
                 'registration_date': user[7].isoformat() if user[7] else None
-            })  # ✅ بدلاً من .to_dict('records')
+            })
+        
+        # جلب روابط التواصل
+        cursor.execute("""
+            SELECT u.user_id, u.full_name, ul.platform, ul.url
+            FROM user_links ul
+            JOIN user_profiles u ON ul.user_id = u.user_id
+        """)
+        social_links = cursor.fetchall()
+        
+        social_data = []
+        for link in social_links:
+            social_data.append({
+                'user_id': link[0],
+                'full_name': link[1],
+                'platform': link[2],
+                'url': link[3]
+            })
         
         conn.close()
         
         return {
             'backup_timestamp': datetime.now().isoformat(),
+            'environment': DB_CONFIG.get('environment', 'unknown'),
             'users_count': len(users_data),
-            'users': users_data  # ✅ نفس النتيجة ولكن بدون pandas
+            'users': users_data,
+            'social_links_count': len(social_data),
+            'social_links': social_data
         }
         
     except Exception as e:
