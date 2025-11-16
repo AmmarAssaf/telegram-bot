@@ -1,6 +1,2 @@
 python-telegram-bot==20.7
-phonenumbers==8.13.16
-schedule==1.2.0
-python-dotenv==1.0.0
-# ❌ أزلت pandas و psycopg2
 
